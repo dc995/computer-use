@@ -83,6 +83,30 @@ python main.py --instructions "Open web browser and go to microsoft.com"
 
 > **Known limitation (mixed-DPI multi-monitor):** Screen capture (`mss`) and input (`pyautogui`) share one coordinate space, which works reliably when all monitors use the **same** display-scaling/DPI. On setups where monitors run at *different* scaling factors (e.g. a 150% laptop panel beside a 100% external monitor), `pyautogui`'s physical-pixel clicks can drift on the lower-DPI display because it only sets system-level (not per-monitor v2) DPI awareness. Workaround: pin the agent to a single display with `--monitor 1` (or the relevant index). A future improvement would be to enable per-monitor-v2 DPI awareness and translate coordinates per monitor.
 
+### Evaluating Models
+
+`eval.py` is a small benchmark harness used to pick the default model. It runs each candidate model live against a set of tasks, then uses a separate judge model to score the final screenshot for success. Because it drives your **real** mouse and keyboard and makes live model calls, the same safety caveats as the main app apply.
+
+```bash
+# Compare the default candidate models on all built-in tasks
+python eval.py
+
+# Compare specific models on a subset of tasks, single monitor, 5-min cap
+python eval.py --models gpt-5.5 claude-sonnet-4.6 --tasks browser_microsoft --monitor 1 --timeout 300
+```
+
+Results are written to a JSON file (`eval_results.json` by default) with per-run success, steps, latency, token usage, and cost.
+
+Arguments:
+
+* `--models`: Candidate models to compare (default: `claude-opus-4.8 claude-sonnet-4.6 gpt-5.5 gemini-3.1-pro-preview`)
+* `--judge-model`: Model used to score the final screenshots (default: `gpt-5.5`)
+* `--tasks`: Subset of built-in task ids to run (default: all). Built-in ids: `browser_microsoft`, `open_notepad`, `settings_about` — note `open_notepad` and `settings_about` are Windows-specific
+* `--timeout`: Per-task timeout in seconds (default: 600)
+* `--output`: Where to write the JSON results (default: `eval_results.json`)
+* `--monitor`: Which display to view/control — `all` (default) or a 1-based index (same semantics as `main.py`)
+* `--no-done`: Suppress the completion indicator when the eval run finishes
+
 ### Safety
 
 This agent controls your **real** mouse and keyboard. It is configured to run autonomously: tool permissions are auto-approved (`PermissionHandler.approve_all`) and a custom system prompt replaces the SDK's default guardrails (`system_message` uses `mode: "replace"`). Only run it on a machine where you are comfortable letting it act on your behalf, and supervise it while it works.
