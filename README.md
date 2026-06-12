@@ -15,7 +15,7 @@ A sample application that uses the [GitHub Copilot SDK](https://github.com/githu
 
 ## Model Selection
 
-The default model is **`gpt-5.5`**. It was selected empirically with the bundled eval harness (`eval.py`, run 2026-06-11): across the test tasks all candidate models tied on judged success, so the deciding factor was efficiency — `gpt-5.5` completed tasks in the fewest steps and lowest latency, and at a fraction of the cost of Claude Opus 4.8 with no loss in capability. You can switch models at any time with `--model` (for example `--model claude-sonnet-4.6`), or run `--list-models` to see what your Copilot account exposes.
+The default model is **`gpt-5.5`**, chosen for its balance of capability, speed, and cost on computer-use tasks. You can switch models at any time with `--model` (for example `--model claude-sonnet-4.6`), or run `--list-models` to see what your Copilot account exposes.
 
 ## Getting Started
 
@@ -82,30 +82,6 @@ python main.py --instructions "Open web browser and go to microsoft.com"
 * `--no-done`: Suppress the completion indicator. By default, when a run finishes the agent opens `done.html` (a full-screen "I'm done" banner) in your default browser so you get a clear visual signal that it's finished. Pass `--no-done` to disable it.
 
 > **Known limitation (mixed-DPI multi-monitor):** Screen capture (`mss`) and input (`pyautogui`) share one coordinate space, which works reliably when all monitors use the **same** display-scaling/DPI. On setups where monitors run at *different* scaling factors (e.g. a 150% laptop panel beside a 100% external monitor), `pyautogui`'s physical-pixel clicks can drift on the lower-DPI display because it only sets system-level (not per-monitor v2) DPI awareness. Workaround: pin the agent to a single display with `--monitor 1` (or the relevant index). A future improvement would be to enable per-monitor-v2 DPI awareness and translate coordinates per monitor.
-
-### Evaluating Models
-
-`eval.py` is a small benchmark harness used to pick the default model. It runs each candidate model live against a set of tasks, then uses a separate judge model to score the final screenshot for success. Because it drives your **real** mouse and keyboard and makes live model calls, the same safety caveats as the main app apply.
-
-```bash
-# Compare the default candidate models on all built-in tasks
-python eval.py
-
-# Compare specific models on a subset of tasks, single monitor, 5-min cap
-python eval.py --models gpt-5.5 claude-sonnet-4.6 --tasks browser_microsoft --monitor 1 --timeout 300
-```
-
-Results are written to a JSON file (`eval_results.json` by default) with per-run success, steps, latency, token usage, and cost.
-
-Arguments:
-
-* `--models`: Candidate models to compare (default: `claude-opus-4.8 claude-sonnet-4.6 gpt-5.5 gemini-3.1-pro-preview`)
-* `--judge-model`: Model used to score the final screenshots (default: `gpt-5.5`)
-* `--tasks`: Subset of built-in task ids to run (default: all). Built-in ids: `browser_microsoft`, `open_notepad`, `settings_about` — note `open_notepad` and `settings_about` are Windows-specific
-* `--timeout`: Per-task timeout in seconds (default: 600)
-* `--output`: Where to write the JSON results (default: `eval_results.json`)
-* `--monitor`: Which display to view/control — `all` (default) or a 1-based index (same semantics as `main.py`)
-* `--no-done`: Suppress the completion indicator when the eval run finishes
 
 ### Safety
 

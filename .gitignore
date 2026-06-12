@@ -406,7 +406,8 @@ env/
 .env
 *.log
 
-# Benchmark harness results and writeup (not part of the published sample)
+# Benchmark harness and results (not part of the published sample)
 BENCHMARK.md
+eval.py
 eval_results.json
 eval_*.json
