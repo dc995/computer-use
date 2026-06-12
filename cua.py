@@ -1,12 +1,27 @@
-import asyncio
-import base64
-import inspect
-import io
-import json
-import re
+"""
+Computer-use tooling for the GitHub Copilot SDK.
 
-import openai
-import PIL
+The original implementation drove the OpenAI Responses API "computer" tool
+directly. This version exposes the local computer's capabilities (screenshot,
+click, type, scroll, drag, ...) as GitHub Copilot SDK custom tools. The SDK runs
+the agentic loop: the model calls ``screenshot`` to see the screen, issues an
+action tool, observes the returned screenshot, and repeats until the task is
+complete.
+
+``Scaler`` is unchanged — it resizes screenshots to a model-friendly resolution
+and translates the model's coordinates back to the real screen.
+"""
+
+from __future__ import annotations
+
+import base64
+import io
+
+import PIL.Image
+from pydantic import BaseModel, Field
+
+from copilot import define_tool
+from copilot.tools import Tool, ToolBinaryResult, ToolResult
 
 
 class Scaler:
@@ -92,165 +107,138 @@ class Scaler:
         return int(x), int(y)
 
 
-class Agent:
-    """CUA agent to start and continue task execution"""
+# ---------------------------------------------------------------------------
+# Tool parameter schemas. These must live at module level so the SDK can resolve
+# the handler annotations while ``from __future__ import annotations`` is active.
+# ---------------------------------------------------------------------------
 
-    def __init__(self, client, model: str, computer, logger=None):
-        self.client = client
-        self.model = model
-        self.computer = computer
-        self.logger = logger
-        self.tools = {}
-        self.extra_headers = None
-        self.reasoning = {"effort": "medium", "summary": "detailed"}
-        self.parallel_tool_calls = False
-        self.start_task()
 
-    def add_tool(self, tool: dict, func):
-        name = tool["name"]
-        self.tools[name] = (tool, func)
+class ClickParams(BaseModel):
+    x: int = Field(description="X coordinate within the screenshot, 0 at the left edge")
+    y: int = Field(description="Y coordinate within the screenshot, 0 at the top edge")
+    button: str = Field(default="left", description="Mouse button: 'left', 'right', or 'wheel'")
 
-    @property
-    def requires_user_input(self) -> bool:
-        if self.response is None or len(self.response.output) == 0:
-            return True
-        item = self.response.output[-1]
-        return item.type == "message" and item.role == "assistant"
 
-    @property
-    def messages(self) -> list[str]:
-        result: list[str] = []
-        if self.response:
-            for item in self.response.output:
-                if item.type == "message":
-                    for content in item.content:
-                        if content.type == "output_text":
-                            result.append(content.text)
-        return result
+class PointParams(BaseModel):
+    x: int = Field(description="X coordinate within the screenshot, 0 at the left edge")
+    y: int = Field(description="Y coordinate within the screenshot, 0 at the top edge")
 
-    def start_task(self):
-        self.response = None
 
-    async def continue_task(
-        self,
-        input: str | openai.types.responses.response_input_param.ResponseInputParam,
-        temperature=None,
-    ):
-        inputs = []
-        screenshot = ""
-        previous_response = self.response
-        previous_response_id = None
-        if previous_response:
-            previous_response_id = previous_response.id
-            for item in previous_response.output:
-                if item.type == "computer_call":
-                    for action in item.actions:
-                        action_args = vars(action) | {}
-                        action_type = action_args.pop("type")
-                        if action_type == "drag":
-                            action_args["path"] = [(p.x, p.y) for p in action.path]
-                        if action_type != "screenshot":
-                            method = getattr(self.computer, action_type)
-                            if inspect.iscoroutinefunction(method):
-                                result = await method(**action_args)
-                            else:
-                                result = method(**action_args)
-                    screenshot = await self.computer.screenshot()
-                    output = openai.types.responses.response_input_param.ComputerCallOutput(
-                        type="computer_call_output",
-                        call_id=item.call_id,
-                        output=openai.types.responses.response_input_param.ResponseComputerToolCallOutputScreenshotParam(
-                            type="computer_screenshot",
-                            image_url=f"data:image/png;base64,{screenshot}",
-                            detail="original",
-                        )
-                    )
-                    inputs.append(output)
-                elif item.type == "function_call":
-                    tool_name = item.name
-                    kwargs = json.loads(item.arguments)
-                    if tool_name not in self.tools:
-                        raise ValueError(f"Unsupported tool '{tool_name}'.")
-                    _, func = self.tools[tool_name]
-                    if inspect.iscoroutinefunction(func):
-                        result = await func(**kwargs)
-                    else:
-                        result = func(**kwargs)
-                    output = (
-                        openai.types.responses.response_input_param.FunctionCallOutput(
-                            type="function_call_output",
-                            call_id=item.call_id,
-                            output=json.dumps(result),
-                        )
-                    )
-                    inputs.append(output)
-                elif item.type == "reasoning" or item.type == "message":
-                    pass
-                else:
-                    message = f"Unsupported response output type '{item.type}'."
-                    raise NotImplementedError(message)
-        if isinstance(input, str):
-            inputs.append(
-                openai.types.responses.response_input_param.Message(
-                    role="user",
-                    content=input,
-                )
-            )
-        else:
-            inputs.extend(input)
-        self.response = None
-        wait = 0
-        retry = 10
-        while retry > 0:
-            retry -= 1
-            try:
-                kwargs = {
-                    "model": self.model,
-                    "input": inputs,
-                    "previous_response_id": previous_response_id,
-                    "tools": self.get_tools(),
-                    "reasoning": self.reasoning,
-                    "truncation": "auto",
-                    "extra_headers": self.extra_headers,
-                    "parallel_tool_calls": self.parallel_tool_calls,
-                    **({} if temperature is None else {"temperature": temperature}),
-                }
-                if isinstance(self.client, openai.AsyncOpenAI):
-                    self.response = await self.client.responses.create(**kwargs)
-                else:
-                    self.response = self.client.responses.create(**kwargs)
-                assert self.response.status == "completed"
-                return
-            except openai.RateLimitError as e:
-                if retry <= 0:
-                    if self.logger:
-                        self.logger.exception("Rate limit exceeded.", exc_info=e)
-                    raise
-                match = re.search(r"Please try again in (\d+)s", e.message)
-                wait = int(match.group(1)) if match else 10
-                if self.logger:
-                    self.logger.warning(
-                        f"Rate limit exceeded. Waiting for {wait} seconds.",
-                        exc_info=e,
-                    )
-                await asyncio.sleep(wait)
-            except openai.InternalServerError as e:
-                if retry <= 0:
-                    if self.logger:
-                        self.logger.exception(
-                            f"Internal server error: {e.message}",
-                            exc_info=e,
-                        )
-                    raise
-                wait = max(wait, 10)
-                if self.logger:
-                    self.logger.warning(
-                        f"Internal server error: {e.message}. Waiting for {wait} seconds.",
-                        exc_info=e,
-                    )
-                await asyncio.sleep(wait)
+class ScrollParams(BaseModel):
+    x: int = Field(description="X coordinate of the cursor before scrolling")
+    y: int = Field(description="Y coordinate of the cursor before scrolling")
+    scroll_x: int = Field(default=0, description="Horizontal scroll amount (positive = right)")
+    scroll_y: int = Field(default=0, description="Vertical scroll amount (positive = down)")
 
-    def get_tools(self) -> list[openai.types.responses.tool_param.ToolParam]:
-        tools = [entry[0] for entry in self.tools.values()]
-        computer_tool = openai.types.responses.ComputerToolParam(type="computer")
-        return [computer_tool, *tools]
+
+class TypeParams(BaseModel):
+    text: str = Field(description="The literal text to type at the current keyboard focus")
+
+
+class KeypressParams(BaseModel):
+    keys: list[str] = Field(
+        description="Keys to press together, e.g. ['ctrl', 'c'] or ['enter']",
+    )
+
+
+class DragParams(BaseModel):
+    path: list[list[int]] = Field(
+        description="Ordered list of [x, y] points to drag through with the left button held",
+    )
+
+
+class WaitParams(BaseModel):
+    ms: int = Field(default=1000, description="Milliseconds to wait before the next screenshot")
+
+
+def build_computer_tools(computer: Scaler) -> list[Tool]:
+    """Build the Copilot SDK tool set that lets the model drive ``computer``.
+
+    Every action tool returns a fresh screenshot so the model can immediately
+    observe the result, mirroring the screenshot-after-action loop of the
+    original computer-use implementation.
+    """
+
+    async def ensure_initialized() -> None:
+        # ``_point_to_screen_coords`` needs the real screen size, which is only
+        # known after the first screenshot. Take one lazily if needed.
+        if computer.screen_width <= 0:
+            await computer.screenshot()
+
+    async def result_with_screenshot(note: str) -> ToolResult:
+        image = await computer.screenshot()
+        return ToolResult(
+            text_result_for_llm=note,
+            binary_results_for_llm=[
+                ToolBinaryResult(data=image, mime_type="image/png", type="image")
+            ],
+        )
+
+    @define_tool(
+        "screenshot",
+        description="Capture the current screen. Call first, and after any action, to see the result.",
+        skip_permission=True,
+    )
+    async def screenshot() -> ToolResult:
+        await ensure_initialized()
+        return await result_with_screenshot("Current screen.")
+
+    @define_tool("click", description="Click the mouse at the given screenshot coordinates.")
+    async def click(params: ClickParams) -> ToolResult:
+        await ensure_initialized()
+        await computer.click(params.x, params.y, button=params.button)
+        return await result_with_screenshot(
+            f"Clicked {params.button} button at ({params.x}, {params.y})."
+        )
+
+    @define_tool("double_click", description="Double-click the mouse at the given coordinates.")
+    async def double_click(params: PointParams) -> ToolResult:
+        await ensure_initialized()
+        await computer.double_click(params.x, params.y)
+        return await result_with_screenshot(f"Double-clicked at ({params.x}, {params.y}).")
+
+    @define_tool("move", description="Move the mouse cursor to the given coordinates.")
+    async def move(params: PointParams) -> ToolResult:
+        await ensure_initialized()
+        await computer.move(params.x, params.y)
+        return await result_with_screenshot(f"Moved cursor to ({params.x}, {params.y}).")
+
+    @define_tool("scroll", description="Scroll the wheel at the given coordinates.")
+    async def scroll(params: ScrollParams) -> ToolResult:
+        await ensure_initialized()
+        await computer.scroll(params.x, params.y, params.scroll_x, params.scroll_y)
+        return await result_with_screenshot(
+            f"Scrolled by ({params.scroll_x}, {params.scroll_y}) at ({params.x}, {params.y})."
+        )
+
+    @define_tool("type", description="Type literal text at the current keyboard focus.")
+    async def type_text(params: TypeParams) -> ToolResult:
+        await ensure_initialized()
+        await computer.type(params.text)
+        return await result_with_screenshot(f"Typed: {params.text!r}.")
+
+    @define_tool(
+        "keypress",
+        description="Press one or more keys together (e.g. ['ctrl', 'c'], ['enter'], ['win']).",
+    )
+    async def keypress(params: KeypressParams) -> ToolResult:
+        await ensure_initialized()
+        await computer.keypress(params.keys)
+        return await result_with_screenshot(f"Pressed keys: {params.keys}.")
+
+    @define_tool("drag", description="Press the left button and drag through a path of points.")
+    async def drag(params: DragParams) -> ToolResult:
+        await ensure_initialized()
+        await computer.drag([tuple(point) for point in params.path])
+        return await result_with_screenshot(f"Dragged through {len(params.path)} point(s).")
+
+    @define_tool(
+        "wait",
+        description="Wait for the UI to settle (e.g. a page to load), then return a screenshot.",
+        skip_permission=True,
+    )
+    async def wait(params: WaitParams) -> ToolResult:
+        await computer.wait(params.ms)
+        return await result_with_screenshot(f"Waited {params.ms} ms.")
+
+    return [screenshot, click, double_click, move, scroll, type_text, keypress, drag, wait]

@@ -398,3 +398,15 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Python virtual environments and local secrets
+.venv/
+venv/
+env/
+.env
+*.log
+
+# Benchmark harness results and writeup (not part of the published sample)
+BENCHMARK.md
+eval_results.json
+eval_*.json
