@@ -1,0 +1,59 @@
+requirements.txt
+  s_083ba269bab6c6::t_12e0da5b61a2cb 4-5
+  s_083ba269bab6c6::t_9c58e1bbe6dcc2 2
+  s_083ba269bab6c6::t_1a668cb25ab1f6 1
+README.md
+  s_083ba269bab6c6::t_1a668cb25ab1f6 80
+  s_083ba269bab6c6::t_aed9dd4fad242c 84-85
+  s_083ba269bab6c6::t_28794eaa292a95 18,77
+  s_083ba269bab6c6::t_3d871db1c557f5 3-4,32,103-110
+  s_083ba269bab6c6::t_28edcff1ec87fc 1,5,9,11,14-17,24,26,41,43-48,50-52,66,69-72,76,78-79,83,86-88,100-101
+  s_083ba269bab6c6::t_29e7e1e86ecb36 81
+local_computer.py
+  s_083ba269bab6c6::t_ab5f4fe10eb17a 123
+  s_083ba269bab6c6::t_86b102b86aed60 5,7,11,13-26,28-49,54-57,61-66,68,73-76,81-83,88-90,93-94,105-106
+done.html
+  s_083ba269bab6c6::t_0cac2bc50a9984 1-54
+.gitignore
+  s_083ba269bab6c6::t_3d871db1c557f5 401-412
+LICENSE.md
+  s_083ba269bab6c6::t_3d871db1c557f5 4
+CONTRIBUTING.md
+  s_083ba269bab6c6::t_3d871db1c557f5 3-4,6-9,50,55
+CHANGELOG.md
+  s_083ba269bab6c6::t_d5443fb4d846c0 3-23
+main.py
+  s_083ba269bab6c6::t_28794eaa292a95 51-56
+  s_083ba269bab6c6::t_8c127830266a5b 114-120,149-150,152-153,191
+  s_083ba269bab6c6::t_473bdcd9beffeb 23-25,34-50,128-133,194-196
+  s_083ba269bab6c6::t_93521be3132e59 2-14,17-18,22,29-31,58-61,66-80,82-83,86,88-91,93-113,136-138,140-148,151,154-164,166-190,192-193,197
+  s_083ba269bab6c6::t_330cd5c2385a0f 62-65,121-127,139
+cua.py
+  s_083ba269bab6c6::t_1348b67ae83c73 110-113,116-119,122-244
+  s_083ba269bab6c6::t_c9ae178101bfb1 1-16,20-24
+eval.py
+  s_083ba269bab6c6::t_4e82d9bae86710 41-44,157-158
+  s_083ba269bab6c6::t_b224c914af7a5a 233-234
+  s_083ba269bab6c6::t_a2e74993e39e3e 247-248
+  s_083ba269bab6c6::t_0fac9524bc89ae 1-31,33-40,45-117,121-156,159,161-232,235-246,249-257,269-270,273-284,286-292,294-301,307-310
+  s_083ba269bab6c6::t_e7e0c3d96ec6ac 258-262,285
+  s_083ba269bab6c6::t_c0e6a7690940f8 32,263-268,302-306
+  s_083ba269bab6c6::t_633c673d90577f 118-120,160,293
+  s_083ba269bab6c6::t_2f428c411a794a 271-272
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "84251ec729edb709db04d0f6246ca613774fd784",
+  "prompts": {},
+  "sessions": {
+    "s_083ba269bab6c6": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "ed91c017-7c42-4c96-9921-0648a69af7b7",
+        "model": "gpt-5.3-codex"
+      },
+      "human_author": "dc995 <dc995@hotmail.com>"
+    }
+  }
+}
