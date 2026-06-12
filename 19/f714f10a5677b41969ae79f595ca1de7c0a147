@@ -1,0 +1,21 @@
+.gitignore
+  s_083ba269bab6c6::t_e1684ce781d921 409,411
+README.md
+  s_083ba269bab6c6::t_e1684ce781d921 18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "19f714f10a5677b41969ae79f595ca1de7c0a147",
+  "prompts": {},
+  "sessions": {
+    "s_083ba269bab6c6": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "ed91c017-7c42-4c96-9921-0648a69af7b7",
+        "model": "gpt-5.3-codex"
+      },
+      "human_author": "dc995 <dc995@hotmail.com>"
+    }
+  }
+}
